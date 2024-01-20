@@ -91,7 +91,7 @@ namespace Components.QLearning
         {
             if (!showSimulation)
             {
-                _qMindTrainer.DoStep(train);
+                _qMindTrainer.DoStep(train, _worldInfo);
             }
             else
             {
@@ -101,7 +101,7 @@ namespace Components.QLearning
                     other.speed = agentSpeed;
                     
                     _started = true;
-                    _qMindTrainer.DoStep(train);
+                    _qMindTrainer.DoStep(train, _worldInfo);
         
                     _agentCell = _qMindTrainer.AgentPosition;
                     _oponentCell = _qMindTrainer.OtherPosition;

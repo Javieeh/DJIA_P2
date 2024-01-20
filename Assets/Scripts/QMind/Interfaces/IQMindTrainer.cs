@@ -41,6 +41,6 @@ namespace QMind.Interfaces
         public event EventHandler OnEpisodeFinished;
         
         public void Initialize(QMindTrainerParams qMindTrainerParams, WorldInfo worldInfo, INavigationAlgorithm navigationAlgorithm);
-        public void DoStep(bool train);
+        public void DoStep(bool train, WorldInfo _worldInfo); //Añadimos worldInfo
     }
 }
