@@ -61,7 +61,7 @@ namespace Grupo9
 
         public bool explorar = true;
 
-        private string filePath = "C:/Users/Javie/Documents/GitHub/DJIA_P2/Assets/Scripts/Grupo9/tableQ.csv";
+        private string filePath = "Assets/Scripts/Grupo9/tableQ.csv";
 
         public void Initialize(QMind.QMindTrainerParams qMindTrainerParams, WorldInfo worldInfo, INavigationAlgorithm navigationAlgorithm)
         {
@@ -158,7 +158,10 @@ namespace Grupo9
 
                 //Debug.Log("MyTrainer: DoStep");
 
-                
+                if (otherCell == agentCell)
+                {
+
+                }
                     Debug.Log("csv escrito");
 
                     File.WriteAllLines(@"C:/Users/Javie/Documents/GitHub/DJIA_P2/Assets/Scripts/Grupo9/tableQ.csv", ToCsv(tableQ));
@@ -183,12 +186,13 @@ namespace Grupo9
         public float GetReward(CellInfo nextCell, CellInfo currentCell)
         {
             if (nextCell.Walkable &&
-                nextCell.Distance(OtherPosition, CellInfo.DistanceType.Manhattan) > 
+                nextCell.Distance(OtherPosition, CellInfo.DistanceType.Manhattan) >
                 currentCell.Distance(OtherPosition, CellInfo.DistanceType.Manhattan))
             {
                 return 100.0f;
-            }
-            else return -100.0f;
+            } 
+            else return 0.0f;
+
         }
 
         public float GetMaxQ(CellInfo nextCell, WorldInfo worldInfo)
@@ -243,7 +247,7 @@ namespace Grupo9
             }
             Debug.Log("CSV CREADO");
         }
-        private static IEnumerable<String> ToCsv<T>(T[,] data, string separator = ",")
+        private static IEnumerable<String> ToCsv<T>(T[,] data, string separator = "/")
         {
             for (int i = 0; i < data.GetLength(0); ++i)
                 yield return string.Join(separator, Enumerable

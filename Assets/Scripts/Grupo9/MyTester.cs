@@ -9,7 +9,7 @@ namespace GrupoP
     public class MyTester : IQMind
     {
         private WorldInfo _worldInfo;
-        private string filePath = "C:/Users/Javie/Documents/GitHub/DJIA_P2/Assets/Scripts/Grupo9/tableQ.csv";
+        private string filePath = "Assets/Scripts/Grupo9/tableQ.csv";
 
         //Tabla Q
         public float[,] tableQaux { get; set; }
@@ -22,35 +22,29 @@ namespace GrupoP
         {
             _worldInfo = worldInfo;
 
-            this.nRows = worldInfo.WorldSize.x * 1000 + worldInfo.WorldSize.y * 100 + worldInfo.WorldSize.x * 10 + worldInfo.WorldSize.y; //Cálculo del grid 
+            this.nRows = _worldInfo.WorldSize.x * 1000 + _worldInfo.WorldSize.y * 100 + _worldInfo.WorldSize.x * 10 + _worldInfo.WorldSize.y; //Cálculo del grid 
             this.nCols = 4; //Numero de acciones posibles (izquierda, derecha, arriba, abajo)
             this.tableQaux = new float[nRows, nCols];
 
             this.tableQ = LoadQTable(this.tableQaux);
 
-            for (int i = 0; i < this.nRows; i++)
-            {
-                for (int j = 0; j < this.nCols; j++)
-                {
-                    this.tableQ[i, j] = 0.0f;
-                    Debug.Log(this.tableQ[i, j]);
-                }
-            }
+            
         }
 
         public CellInfo GetNextStep(CellInfo currentPosition, CellInfo otherPosition)
         {
+
             int state = CalculateState(currentPosition, otherPosition);
             int action = GetAction(state);
             CellInfo agentCell = QMind.Utils.MoveAgent(action, currentPosition, _worldInfo);
 
             while (!agentCell.Walkable)
             {
-                action = GetAction(Random.Range(0, 4));
+                action = GetAnotherAction(state, action);
                 agentCell = QMind.Utils.MoveAgent(action, currentPosition, _worldInfo);
 
             }
-            Debug.Log("Action = " + action);
+            Debug.Log("TablaQ = " + tableQ[state,action]);
 
             return agentCell;
         }
@@ -70,6 +64,21 @@ namespace GrupoP
             return bestQaction;
         }
 
+        private int GetAnotherAction(int state, int preAction)
+        {
+            int bestQaction = Random.Range(0,4);
+            float bestQ = -1000.0f;
+            for (int i = 0; i < nCols; i++)
+            {
+                if (tableQ[state, i] >= bestQ && i != preAction)
+                {
+                    bestQ = tableQ[state, i];
+                    bestQaction = i;
+                }
+            }
+            return bestQaction;
+        }
+
         private float[,] LoadQTable(float[,] table)
         {
             if (File.Exists(filePath))
@@ -80,7 +89,7 @@ namespace GrupoP
                 for (int i = 0; i < lines.Length; i++)
                 {
                     // Divide cada línea en valores usando la coma como separador
-                    string[] values = lines[i].Split(',');
+                    string[] values = lines[i].Split('/');
 
                     for (int j = 0; j < values.Length && j < nCols; j++)
                     {
