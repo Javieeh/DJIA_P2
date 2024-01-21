@@ -61,21 +61,24 @@ namespace Grupo9
 
         public bool explorar = true;
 
+        private string filePath = "C:/Users/Javie/Documents/GitHub/DJIA_P2/Assets/Scripts/Grupo9/tableQ.csv";
+
         public void Initialize(QMind.QMindTrainerParams qMindTrainerParams, WorldInfo worldInfo, INavigationAlgorithm navigationAlgorithm)
         {
-            this.nRows = 4; //Numero de acciones posibles (izquierda, derecha, arriba, abajo)
-            this.nCols = worldInfo.WorldSize.x * worldInfo.WorldSize.y; //Cálculo del grid 
+            this.nRows = worldInfo.WorldSize.x * 1000 + worldInfo.WorldSize.y * 100 + worldInfo.WorldSize.x * 10 + worldInfo.WorldSize.y; //Numero de acciones posibles (izquierda, derecha, arriba, abajo)
+            this.nCols = 4; //Cálculo del grid 
             this.tableQ = new float[nRows, nCols];
 
-            for (int i = 0; i < this.nRows; i++)
-            {
-                for (int j = 0; j < this.nCols; j++)
+           
+                for (int i = 0; i < this.nRows; i++)
                 {
-                    this.tableQ[i, j] = 0.0f;
+                    for (int j = 0; j < this.nCols; j++)
+                    {
+                        this.tableQ[i, j] = 0.0f;
 
+                    }
                 }
-            }
-
+            
             this.parameters = qMindTrainerParams;
             Debug.Log("MyTrainer: initialized");
 
@@ -105,8 +108,7 @@ namespace Grupo9
                 float randomExploration = UnityEngine.Random.Range(0f, 1f);
                 int action = UnityEngine.Random.Range(0, 4);
                 CellInfo agentCell = QMind.Utils.MoveAgent(action, AgentPosition, worldInfo);
-                int state = agentCell.x * worldInfo.WorldSize.y + agentCell.y;
-                CellInfo agentcell;
+                int state = CalculateState(AgentPosition, OtherPosition);
 
                 if (randomExploration <= parameters.epsilon)
                 {
@@ -115,25 +117,39 @@ namespace Grupo9
                         action = UnityEngine.Random.Range(0, 4);
                         agentCell = QMind.Utils.MoveAgent(action, AgentPosition, worldInfo);
                     }
-                } else
+                } 
+                else
                 {
+                    
                     Debug.Log("NO EXPLORAMOS!");
-                    action = mejorAccionQ(AgentPosition);
-                    agentcell = QMind.Utils.MoveAgent(action, AgentPosition, worldInfo);
+                    action = mejorAccionQ(state);
+                    agentCell = QMind.Utils.MoveAgent(action, AgentPosition, worldInfo);
+
+                    //Para evitar bucles infinitos
+                    if (!agentCell.Walkable)
+                    {
+                        while (!agentCell.Walkable)
+                        {
+                            action = UnityEngine.Random.Range(0, 4);
+                            agentCell = QMind.Utils.MoveAgent(action, AgentPosition, worldInfo);
+                        }
+                    }
+                    
                 }
-                state = agentCell.x * worldInfo.WorldSize.y + agentCell.y;
+                //state = agentCell.x * worldInfo.WorldSize.y + agentCell.y;
 
-
-                float q = getQ(AgentPosition, action, worldInfo);
+                int q = getQ(AgentPosition, action, worldInfo);
                 float reward = GetReward(agentCell, AgentPosition);
                 float maxQ = GetMaxQ(agentCell, worldInfo);
 
-                Debug.Log("Estado: " + state);
-                if (tableQ[action, state] == 0.0f)
-                {
-                    tableQ[action, state] = Update_rule(q, reward, maxQ);
-                }
-                Debug.Log("Valor de q: " + tableQ[action, state]);
+                //Debug.Log("Estado: " + state);
+
+                
+
+                tableQ[state, action] = Update_rule(q, reward, maxQ);
+                Debug.Log("TablaQ[" + state + ", " + action + "] = " + tableQ[state, action] + "; Iteracion: " + counter);
+
+                //Debug.Log("Valor de q: " + tableQ[action, state]);
                 AgentPosition = agentCell;
 
 
@@ -142,23 +158,26 @@ namespace Grupo9
 
                 //Debug.Log("MyTrainer: DoStep");
 
-                if (OtherPosition == AgentPosition)
-                {
+                
+                    Debug.Log("csv escrito");
+
                     File.WriteAllLines(@"C:/Users/Javie/Documents/GitHub/DJIA_P2/Assets/Scripts/Grupo9/tableQ.csv", ToCsv(tableQ));
-                }
+                
             }       
         }
-
-        public float getQ(CellInfo currentCell, int action, WorldInfo worldInfo)
+        private int CalculateState(CellInfo currentPosition, CellInfo otherPosition)
         {
-            //float maxQ = GetMaxQ();
-            //float reward = GetReward();
-            //float nextQ = (1 - parameters.alpha) * q + parameters.alpha * (reward + parameters.gamma*maxQ);
+            return currentPosition.x * 1000 + currentPosition.y * 100 + otherPosition.x * 10 + otherPosition.y; 
+
+        }
+        public int getQ(CellInfo currentCell, int action, WorldInfo worldInfo)
+        {
+
             int estado = (currentCell.x * worldInfo.WorldSize.y) + currentCell.y;
             float qValue = 0.0f;
-            qValue = tableQ[action, estado];
+            qValue = tableQ[estado, action];
 
-            return qValue;
+            return (int) qValue;
 
         }
         public float GetReward(CellInfo nextCell, CellInfo currentCell)
@@ -169,7 +188,7 @@ namespace Grupo9
             {
                 return 100.0f;
             }
-            else return -1.0f;
+            else return -100.0f;
         }
 
         public float GetMaxQ(CellInfo nextCell, WorldInfo worldInfo)
@@ -179,15 +198,15 @@ namespace Grupo9
             float best_q = -1000.0f;
             for (int i = 0; i < 4; i++)
             {
-                if (tableQ[i, state] > best_q)
+                if (tableQ[state, i] > best_q)
                 {
-                    best_q = tableQ[i, state];
+                    best_q = tableQ[state, i];
                 }
             }
             return best_q;
         }
 
-        public float Update_rule(float currentQ, float reward, float maxQ)
+        public float Update_rule(int currentQ, float reward, float maxQ)
         {
             float aux = 0.0f;
             aux = (1 - parameters.alpha) * currentQ + parameters.alpha * (reward + parameters.gamma *
@@ -195,15 +214,15 @@ namespace Grupo9
             return aux;
         }
 
-        public int mejorAccionQ(CellInfo actualState)
+        public int mejorAccionQ(int actualState)
         {
             int bestQaction = 0;
             float bestQ = -1000.0f;
-            for (int i = 0; i < nRows; i++)
+            for (int i = 0; i < nCols; i++)
             {
-                if (tableQ[i, actualState.x*actualState.y] >= bestQ)
+                if (tableQ[actualState, i] >= bestQ)
                 {
-                    bestQ = tableQ[i, actualState.x * actualState.y];
+                    bestQ = tableQ[actualState, i];
                     bestQaction = i;
                 }
             }
@@ -211,14 +230,14 @@ namespace Grupo9
         }
         public void writeCSV()
         {
-            StreamWriter file = new StreamWriter("C:/Users/Javie/Documents/GitHub/DJIA_P2/Assets/Scripts/Grupo9/tableQ.csv");
+            StreamWriter file = new StreamWriter(filePath);
             //my2darray  is my 2d array created.
             for (int i = 0; i < nRows; i++)
             {
                 for (int j = 0; j < nCols; j++)
                 {
                     file.Write(tableQ[i,j]);
-                    file.Write("\t");
+                    file.Write(",");
                 }
                 file.Write("\n"); // go to next line
             }
