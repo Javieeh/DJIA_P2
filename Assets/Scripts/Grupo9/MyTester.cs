@@ -38,12 +38,11 @@ namespace GrupoP
             int action = GetAction(state);
             CellInfo agentCell = QMind.Utils.MoveAgent(action, currentPosition, _worldInfo);
 
-            while (!agentCell.Walkable)
-            {
-                action = GetAnotherAction(state, action);
-                agentCell = QMind.Utils.MoveAgent(action, currentPosition, _worldInfo);
+            //ESTO NO VALE 
+            action = GetAnotherAction(state, action);
+            agentCell = QMind.Utils.MoveAgent(action, currentPosition, _worldInfo);
 
-            }
+            
             Debug.Log("TablaQ = " + tableQ[state,action]);
 
             return agentCell;
@@ -66,7 +65,7 @@ namespace GrupoP
 
         private int GetAnotherAction(int state, int preAction)
         {
-            int bestQaction = Random.Range(0,4);
+            int bestQaction = 0;
             float bestQ = -1000.0f;
             for (int i = 0; i < nCols; i++)
             {

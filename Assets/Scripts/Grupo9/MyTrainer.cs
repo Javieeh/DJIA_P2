@@ -38,9 +38,79 @@ using System.Linq;
 
 namespace Grupo9
 {
+    public class State : MonoBehaviour
+    {
+        public int id;
+        public bool[] walkableNeighbours; // [north, south, west, east] walkables
+
+        // [north/aligned/south , west/aligned/east] = [1/0/-1 , 1/0/-1]
+        public int[] enemyRelativePosition;
+
+        public State(int id, bool[] walkableArray, int[] enemyPosArray)
+        {
+            this.id = id;
+            walkableNeighbours = walkableArray;
+            enemyRelativePosition = enemyPosArray;
+        }
+    }
+    public class TableQ : MonoBehaviour
+    {
+        public int nRows;
+        public int nCols;
+        public float[,] value;
+        public State[] statesArray;
+
+        public TableQ()
+        {
+            // Tamaño de la tabla
+            this.nRows = 4; // Acciones posibles
+            this.nCols = (4 * 4) * (3 * 3); // Estados posibles
+            this.value = new float[this.nRows, this.nCols]; // Matriz de valores, es decir tabla Q
+
+        }
+        public void InitializeTableQ()
+        {
+            
+            for (int i = 0; i < this.nRows; i++)
+            {
+                for (int j = 0; j < this.nCols; j++)
+                {
+                    this.value[i, j] = 0.0f;
+                }
+            }
+
+            this.statesArray = InitStatesArray(); // Array de estados
+        }
+
+        public State[] InitStatesArray()
+        {
+            int indice = 0;
+            State[] states = new State[16 * 9]; // 16 combinaciones de walkableNeighbours y 9 combinaciones de enemyRelativePosition
+
+            for (int i = 0; i < 16; i++)
+            {
+                bool[] walkableNeighbours = new bool[4];
+                walkableNeighbours[0] = (i & 8) != 0; // North
+                walkableNeighbours[1] = (i & 4) != 0; // South
+                walkableNeighbours[2] = (i & 2) != 0; // West
+                walkableNeighbours[3] = (i & 1) != 0; // East
+
+                for (int j = -1; j <= 1; j++)
+                {
+                    for (int k = -1; k <= 1; k++)
+                    {
+                        int[] enemyRelativePosition = new int[2] { j, k };
+                        states[indice] = new State(indice, walkableNeighbours, enemyRelativePosition);
+                        indice++;
+                    }
+                }
+            }
+            return states;
+        }
+    }
     public class MyTrainer : IQMindTrainer
     {
-        public int CurrentEpisode { get; }
+        public int CurrentEpisode { get; private set; }
         public int CurrentStep { get; private set; }
         public CellInfo AgentPosition { get; private set; }
         public CellInfo OtherPosition { get; private set; }
@@ -52,137 +122,300 @@ namespace Grupo9
         private INavigationAlgorithm _navigationAlgorithm;
         private int counter = 0;
 
-        //Tabla Q
-        public float[,] tableQ { get; set; }
-        private int nRows { get; set; }
-        private int nCols { get; set; }
-
         QMind.QMindTrainerParams parameters;
 
+        public TableQ tableQ;
         public bool explorar = true;
 
         private string filePath = "Assets/Scripts/Grupo9/tableQ.csv";
 
+        private int numEpisode = 0;
+        private int accionAnterior = -1;
+
         public void Initialize(QMind.QMindTrainerParams qMindTrainerParams, WorldInfo worldInfo, INavigationAlgorithm navigationAlgorithm)
         {
-            this.nRows = worldInfo.WorldSize.x * 1000 + worldInfo.WorldSize.y * 100 + worldInfo.WorldSize.x * 10 + worldInfo.WorldSize.y; //Numero de acciones posibles (izquierda, derecha, arriba, abajo)
-            this.nCols = 4; //Cálculo del grid 
-            this.tableQ = new float[nRows, nCols];
-
-           
-                for (int i = 0; i < this.nRows; i++)
-                {
-                    for (int j = 0; j < this.nCols; j++)
-                    {
-                        this.tableQ[i, j] = 0.0f;
-
-                    }
-                }
-            
             this.parameters = qMindTrainerParams;
             Debug.Log("MyTrainer: initialized");
 
-            Debug.Log("nRows: " + nRows);
-            Debug.Log("nCols: " + nCols);
             _navigationAlgorithm = QMind.Utils.InitializeNavigationAlgo(navigationAlgorithm, worldInfo);
 
             AgentPosition = worldInfo.RandomCell();
             OtherPosition = worldInfo.RandomCell();
             OnEpisodeStarted?.Invoke(this, EventArgs.Empty);
 
-            
+            tableQ = new TableQ();
+            tableQ.InitializeTableQ();
 
-            
         }
 
         public void DoStep(bool train, WorldInfo worldInfo)
         {
             if (explorar)
             {
-                //Movimiento del player (A*)
-                CellInfo otherCell = QMind.Utils.MoveOther(_navigationAlgorithm, OtherPosition, AgentPosition);
-                OtherPosition = otherCell;
-
                 //Movimiento del agente (Q learning)
-
                 float randomExploration = UnityEngine.Random.Range(0f, 1f);
                 int action = UnityEngine.Random.Range(0, 4);
-                CellInfo agentCell = QMind.Utils.MoveAgent(action, AgentPosition, worldInfo);
-                int state = CalculateState(AgentPosition, OtherPosition);
+                CellInfo nextCell = QMind.Utils.MoveAgent(action, AgentPosition, worldInfo);
 
                 if (randomExploration <= parameters.epsilon)
                 {
-                    while (!agentCell.Walkable)
+                    while (!nextCell.Walkable)
                     {
                         action = UnityEngine.Random.Range(0, 4);
-                        agentCell = QMind.Utils.MoveAgent(action, AgentPosition, worldInfo);
+                        nextCell = QMind.Utils.MoveAgent(action, AgentPosition, worldInfo);
                     }
-                } 
+                }
                 else
                 {
-                    
-                    Debug.Log("NO EXPLORAMOS!");
-                    action = mejorAccionQ(state);
-                    agentCell = QMind.Utils.MoveAgent(action, AgentPosition, worldInfo);
+                    action = mejorAccionQ(AgentPosition, worldInfo);
+                    nextCell = QMind.Utils.MoveAgent(action, AgentPosition, worldInfo);
 
-                    //Para evitar bucles infinitos
-                    if (!agentCell.Walkable)
-                    {
-                        while (!agentCell.Walkable)
-                        {
-                            action = UnityEngine.Random.Range(0, 4);
-                            agentCell = QMind.Utils.MoveAgent(action, AgentPosition, worldInfo);
-                        }
-                    }
-                    
+
+
                 }
-                //state = agentCell.x * worldInfo.WorldSize.y + agentCell.y;
 
-                int q = getQ(AgentPosition, action, worldInfo);
-                float reward = GetReward(agentCell, AgentPosition);
-                float maxQ = GetMaxQ(agentCell, worldInfo);
+                float q = getQ(AgentPosition, action, worldInfo);
 
-                //Debug.Log("Estado: " + state);
+                float maxQ = GetMaxQ(nextCell, worldInfo);
 
-                
+                float reward = GetReward(nextCell, AgentPosition);
 
-                tableQ[state, action] = Update_rule(q, reward, maxQ);
-                Debug.Log("TablaQ[" + state + ", " + action + "] = " + tableQ[state, action] + "; Iteracion: " + counter);
 
-                //Debug.Log("Valor de q: " + tableQ[action, state]);
-                AgentPosition = agentCell;
+                float newQ = Update_rule(q, reward, maxQ);
+                updateTableQ(AgentPosition, worldInfo, action, newQ);
 
+                accionAnterior = action;
+
+                AgentPosition = nextCell;
+                CellInfo otherCell = QMind.Utils.MoveOther(_navigationAlgorithm, OtherPosition, AgentPosition);
+                OtherPosition = otherCell;
 
                 CurrentStep = counter;
-                counter += 1;
-
                 //Debug.Log("MyTrainer: DoStep");
+                Debug.Log("csv escrito");
 
-                if (otherCell == agentCell)
+                File.WriteAllLines(@"C:/Users/Javie/Documents/GitHub/DJIA_P2/Assets/Scripts/Grupo9/tableQ.csv", ToCsv(tableQ.value));
+
+                // En el caso de que el player alcance al agente, o se llegue al máximo de pasos, se finaliza el episodio actual y se comienza uno nuevo
+                if (OtherPosition == null || CurrentStep == parameters.maxSteps || OtherPosition == AgentPosition)
                 {
-
+                    OnEpisodeFinished?.Invoke(this, EventArgs.Empty);
+                    NuevoEpisodio(worldInfo);
                 }
-                    Debug.Log("csv escrito");
-
-                    File.WriteAllLines(@"C:/Users/Javie/Documents/GitHub/DJIA_P2/Assets/Scripts/Grupo9/tableQ.csv", ToCsv(tableQ));
-                
-            }       
+                else
+                {
+                    counter += 1;
+                }
+            }
         }
-        private int CalculateState(CellInfo currentPosition, CellInfo otherPosition)
+
+        private void NuevoEpisodio(WorldInfo worldInfo)
         {
-            return currentPosition.x * 1000 + currentPosition.y * 100 + otherPosition.x * 10 + otherPosition.y; 
-
+            AgentPosition = worldInfo.RandomCell();
+            OtherPosition = worldInfo.RandomCell();
+            counter = 0;
+            CurrentStep = counter;
+            numEpisode++;
+            CurrentEpisode = numEpisode;
+            if (numEpisode % parameters.episodesBetweenSaves == 0)
+            {
+                File.WriteAllLines(@"C:/Users/Javie/Documents/GitHub/DJIA_P2/Assets/Scripts/Grupo9/tableQ.csv", ToCsv(tableQ.value));
+            }
+            OnEpisodeStarted?.Invoke(this, EventArgs.Empty);
         }
-        public int getQ(CellInfo currentCell, int action, WorldInfo worldInfo)
+
+        #region AUXILIAR METHODS
+        public int mejorAccionQ(CellInfo currentCell, WorldInfo worldInfo)
+        {
+            //Casillas vecinas
+            CellInfo north = QMind.Utils.MoveAgent(0, currentCell, worldInfo);
+            CellInfo south = QMind.Utils.MoveAgent(2, currentCell, worldInfo);
+            CellInfo east = QMind.Utils.MoveAgent(1, currentCell, worldInfo);
+            CellInfo west = QMind.Utils.MoveAgent(3, currentCell, worldInfo);
+
+            bool[] tempWalkableArray = new bool[] {
+                north.Walkable, east.Walkable, south.Walkable, west.Walkable
+            };
+
+            //Posicion relativa del enemigo
+            int[] tempEnemyRelativePosition = new int[2];
+            if (OtherPosition.y > currentCell.y)
+            {
+                tempEnemyRelativePosition[0] = 1;
+            }
+            if (OtherPosition.y == currentCell.y)
+            {
+                tempEnemyRelativePosition[0] = 0;
+            }
+            if (OtherPosition.y < currentCell.y)
+            {
+                tempEnemyRelativePosition[0] = -1;
+            }
+
+            if (OtherPosition.x > currentCell.x)
+            {
+                tempEnemyRelativePosition[1] = 1;
+            }
+            if (OtherPosition.x == currentCell.x)
+            {
+                tempEnemyRelativePosition[1] = 0;
+            }
+            if (OtherPosition.x < currentCell.x)
+            {
+                tempEnemyRelativePosition[1] = -1;
+            }
+
+            int indice = 0;
+            //Buscamos el estado que corresponda a la casilla vecina y posicion del enemigo relativa calculada
+            for (int i = 0; i < tableQ.statesArray.Length; i++)
+            {
+                if (compararArraysBooleanos(tempWalkableArray, tableQ.statesArray[i].walkableNeighbours)
+                                                &&
+                    compararArraysInt(tempEnemyRelativePosition, tableQ.statesArray[i].enemyRelativePosition))
+                {
+                    indice = i;
+                }
+            }
+
+            int bestAction = 0;
+            float best_q = -1000f;
+
+            for (int actualAction = 0; actualAction < tableQ.nRows; actualAction++)
+            {
+                if (tableQ.value[actualAction, indice] > best_q)
+                {
+                    bestAction = actualAction;
+                    best_q = tableQ.value[bestAction, indice];
+                }
+            }
+
+            return bestAction;
+        }
+
+        public float getQ(CellInfo currentCell, int action, WorldInfo worldInfo)
         {
 
-            int estado = (currentCell.x * worldInfo.WorldSize.y) + currentCell.y;
-            float qValue = 0.0f;
-            qValue = tableQ[estado, action];
+            //Casillas vecinas
+            CellInfo north = QMind.Utils.MoveAgent(0, currentCell, worldInfo);
+            CellInfo south = QMind.Utils.MoveAgent(2, currentCell, worldInfo);
+            CellInfo east = QMind.Utils.MoveAgent(1, currentCell, worldInfo);
+            CellInfo west = QMind.Utils.MoveAgent(3, currentCell, worldInfo);
 
-            return (int) qValue;
+            bool[] tempWalkableArray = new bool[] {
+                north.Walkable, east.Walkable, south.Walkable, west.Walkable
+            };
+
+            //Posicion relativa del enemigo
+            int[] tempEnemyRelativePosition = new int[2];
+            if (OtherPosition.y > currentCell.y)
+            {
+                tempEnemyRelativePosition[0] = 1;
+            }
+            if (OtherPosition.y == currentCell.y)
+            {
+                tempEnemyRelativePosition[0] = 0;
+            }
+            if (OtherPosition.y < currentCell.y)
+            {
+                tempEnemyRelativePosition[0] = -1;
+            }
+
+            if (OtherPosition.x > currentCell.x)
+            {
+                tempEnemyRelativePosition[1] = 1;
+            }
+            if (OtherPosition.x == currentCell.x)
+            {
+                tempEnemyRelativePosition[1] = 0;
+            }
+            if (OtherPosition.x < currentCell.x)
+            {
+                tempEnemyRelativePosition[1] = -1;
+            }
+
+            //Buscamos el estado que corresponda a la casilla vecina y posicion del enemigo relativa calculada
+            for (int i = 0; i < tableQ.statesArray.Length; i++)
+            {
+                if (compararArraysBooleanos(tempWalkableArray, tableQ.statesArray[i].walkableNeighbours)
+                                                &&
+                    compararArraysInt(tempEnemyRelativePosition, tableQ.statesArray[i].enemyRelativePosition))
+                {
+                    return tableQ.value[action, i];
+                }
+            }
+
+            Debug.Log("NO SE HA ENCONTRADO EL ESTADO");
+            return 0;
+
 
         }
+
+        public float GetMaxQ(CellInfo currentCell, WorldInfo worldInfo)
+        {
+
+            //Casillas vecinas
+            CellInfo north = QMind.Utils.MoveAgent(0, currentCell, worldInfo);
+            CellInfo south = QMind.Utils.MoveAgent(2, currentCell, worldInfo);
+            CellInfo east = QMind.Utils.MoveAgent(1, currentCell, worldInfo);
+            CellInfo west = QMind.Utils.MoveAgent(3, currentCell, worldInfo);
+
+            bool[] tempWalkableArray = new bool[] {
+                north.Walkable, east.Walkable, south.Walkable, west.Walkable
+            };
+
+            //Posicion relativa del enemigo
+            int[] tempEnemyRelativePosition = new int[2];
+            if (OtherPosition.y > currentCell.y)
+            {
+                tempEnemyRelativePosition[0] = 1;
+            }
+            if (OtherPosition.y == currentCell.y)
+            {
+                tempEnemyRelativePosition[0] = 0;
+            }
+            if (OtherPosition.y < currentCell.y)
+            {
+                tempEnemyRelativePosition[0] = -1;
+            }
+
+            if (OtherPosition.x > currentCell.x)
+            {
+                tempEnemyRelativePosition[1] = 1;
+            }
+            if (OtherPosition.x == currentCell.x)
+            {
+                tempEnemyRelativePosition[1] = 0;
+            }
+            if (OtherPosition.x < currentCell.x)
+            {
+                tempEnemyRelativePosition[1] = -1;
+            }
+
+            int indice = 0;
+            //Buscamos el estado que corresponda a la casilla vecina y posicion del enemigo relativa calculada
+            for (int i = 0; i < tableQ.statesArray.Length; i++)
+            {
+                if (compararArraysBooleanos(tempWalkableArray, tableQ.statesArray[i].walkableNeighbours)
+                                                &&
+                    compararArraysInt(tempEnemyRelativePosition, tableQ.statesArray[i].enemyRelativePosition))
+                {
+                    indice = i;
+                }
+            }
+
+            float best_q = -1000f;
+
+            for (int actualAction = 0; actualAction < tableQ.nRows; actualAction++)
+            {
+                if (tableQ.value[actualAction, indice] > best_q)
+                {
+                    best_q = tableQ.value[actualAction, indice];
+                }
+            }
+
+            return best_q;
+        }
+
         public float GetReward(CellInfo nextCell, CellInfo currentCell)
         {
             if (nextCell.Walkable &&
@@ -190,27 +423,12 @@ namespace Grupo9
                 currentCell.Distance(OtherPosition, CellInfo.DistanceType.Manhattan))
             {
                 return 100.0f;
-            } 
+            }
             else return 0.0f;
 
         }
 
-        public float GetMaxQ(CellInfo nextCell, WorldInfo worldInfo)
-        {
-            
-            int state = (nextCell.x * worldInfo.WorldSize.y) + nextCell.y;
-            float best_q = -1000.0f;
-            for (int i = 0; i < 4; i++)
-            {
-                if (tableQ[state, i] > best_q)
-                {
-                    best_q = tableQ[state, i];
-                }
-            }
-            return best_q;
-        }
-
-        public float Update_rule(int currentQ, float reward, float maxQ)
+        public float Update_rule(float currentQ, float reward, float maxQ)
         {
             float aux = 0.0f;
             aux = (1 - parameters.alpha) * currentQ + parameters.alpha * (reward + parameters.gamma *
@@ -218,29 +436,73 @@ namespace Grupo9
             return aux;
         }
 
-        public int mejorAccionQ(int actualState)
+        public void updateTableQ(CellInfo currentCell, WorldInfo worldInfo, int accion, float newQ)
         {
-            int bestQaction = 0;
-            float bestQ = -1000.0f;
-            for (int i = 0; i < nCols; i++)
+            //Casillas vecinas
+            CellInfo north = QMind.Utils.MoveAgent(0, currentCell, worldInfo);
+            CellInfo south = QMind.Utils.MoveAgent(2, currentCell, worldInfo);
+            CellInfo east = QMind.Utils.MoveAgent(1, currentCell, worldInfo);
+            CellInfo west = QMind.Utils.MoveAgent(3, currentCell, worldInfo);
+
+            bool[] tempWalkableArray = new bool[] {
+                north.Walkable, east.Walkable, south.Walkable, west.Walkable
+            };
+
+            //Posicion relativa del enemigo
+            int[] tempEnemyRelativePosition = new int[2];
+            if (OtherPosition.y > currentCell.y)
             {
-                if (tableQ[actualState, i] >= bestQ)
+                tempEnemyRelativePosition[0] = 1;
+            }
+            if (OtherPosition.y == currentCell.y)
+            {
+                tempEnemyRelativePosition[0] = 0;
+            }
+            if (OtherPosition.y < currentCell.y)
+            {
+                tempEnemyRelativePosition[0] = -1;
+            }
+
+            if (OtherPosition.x > currentCell.x)
+            {
+                tempEnemyRelativePosition[1] = 1;
+            }
+            if (OtherPosition.x == currentCell.x)
+            {
+                tempEnemyRelativePosition[1] = 0;
+            }
+            if (OtherPosition.x < currentCell.x)
+            {
+                tempEnemyRelativePosition[1] = -1;
+            }
+
+            int indice = 0;
+            //Buscamos el estado que corresponda a la casilla vecina y posicion del enemigo relativa calculada
+            for (int i = 0; i < tableQ.statesArray.Length; i++)
+            {
+                if (compararArraysBooleanos(tempWalkableArray, tableQ.statesArray[i].walkableNeighbours)
+                                                &&
+                    compararArraysInt(tempEnemyRelativePosition, tableQ.statesArray[i].enemyRelativePosition))
                 {
-                    bestQ = tableQ[actualState, i];
-                    bestQaction = i;
+                    indice = i;
                 }
             }
-            return bestQaction;
+
+            tableQ.value[accion, indice] = newQ;
         }
+
+        #endregion
+
+        #region CSV
         public void writeCSV()
         {
             StreamWriter file = new StreamWriter(filePath);
             //my2darray  is my 2d array created.
-            for (int i = 0; i < nRows; i++)
+            for (int i = 0; i < tableQ.nRows; i++)
             {
-                for (int j = 0; j < nCols; j++)
+                for (int j = 0; j < tableQ.nCols; j++)
                 {
-                    file.Write(tableQ[i,j]);
+                    file.Write(tableQ.value[i, j]);
                     file.Write(",");
                 }
                 file.Write("\n"); // go to next line
@@ -254,5 +516,36 @@ namespace Grupo9
                   .Range(0, data.GetLength(1))
                   .Select(j => data[i, j])); // simplest, we don't expect ',' and '"' in the items
         }
+        #endregion
+
+        public static bool compararArraysBooleanos(bool[] array1, bool[] array2)
+        {
+            if (array1.Length != array2.Length)
+                return false;
+
+            for (int i = 0; i < array1.Length; i++)
+            {
+                if (array1[i] != array2[i])
+                    return false;
+            }
+
+            return true;
+        }
+
+        public static bool compararArraysInt(int[] array1, int[] array2)
+        {
+            if (array1.Length != array2.Length)
+                return false;
+
+            for (int i = 0; i < array1.Length; i++)
+            {
+                if (array1[i] != array2[i])
+                    return false;
+            }
+
+            return true;
+        }
     }
+
+
 }
