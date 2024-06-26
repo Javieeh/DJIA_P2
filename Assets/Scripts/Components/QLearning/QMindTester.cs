@@ -74,10 +74,11 @@ namespace Components.QLearning
                 agent.speed = speed;
                 oponent.speed = speed;
 
+                
                 MoveAgent();
                 MoveOpponent();
-                
-                if(_agentCell == _opponentCell)
+
+                if (_agentCell == _opponentCell)
                 {
                     _captures++;
                     Debug.Log($"Opponent captured agent in {_steps} steps");

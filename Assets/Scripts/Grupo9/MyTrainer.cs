@@ -35,6 +35,7 @@ using TMPro;
 using Unity.VisualScripting;
 using System.IO;
 using System.Linq;
+using static UnityEngine.Rendering.DebugUI;
 
 namespace Grupo9
 {
@@ -91,8 +92,8 @@ namespace Grupo9
             {
                 bool[] walkableNeighbours = new bool[4];
                 walkableNeighbours[0] = (i & 8) != 0; // North
-                walkableNeighbours[1] = (i & 4) != 0; // South
-                walkableNeighbours[2] = (i & 2) != 0; // West
+                walkableNeighbours[2] = (i & 4) != 0; // South
+                walkableNeighbours[1] = (i & 2) != 0; // West
                 walkableNeighbours[3] = (i & 1) != 0; // East
 
                 for (int j = -1; j <= 1; j++)
@@ -194,8 +195,6 @@ namespace Grupo9
                 //Debug.Log("MyTrainer: DoStep");
                 Debug.Log("csv escrito");
 
-                File.WriteAllLines(@"C:/Users/Javie/Documents/GitHub/DJIA_P2/Assets/Scripts/Grupo9/tableQ.csv", ToCsv(tableQ.value));
-
                 // En el caso de que el player alcance al agente, o se llegue al máximo de pasos, se finaliza el episodio actual y se comienza uno nuevo
                 if (OtherPosition == null || CurrentStep == parameters.maxSteps || OtherPosition == AgentPosition)
                 {
@@ -219,7 +218,7 @@ namespace Grupo9
             CurrentEpisode = numEpisode;
             if (numEpisode % parameters.episodesBetweenSaves == 0)
             {
-                File.WriteAllLines(@"C:/Users/Javie/Documents/GitHub/DJIA_P2/Assets/Scripts/Grupo9/tableQ.csv", ToCsv(tableQ.value));
+                GuardarTablaQ();
             }
             OnEpisodeStarted?.Invoke(this, EventArgs.Empty);
         }
@@ -424,6 +423,10 @@ namespace Grupo9
             {
                 return 100.0f;
             }
+            if (!nextCell.Walkable)
+            {
+                return -1000f;
+            }
             else return 0.0f;
 
         }
@@ -494,28 +497,33 @@ namespace Grupo9
         #endregion
 
         #region CSV
-        public void writeCSV()
+        private void GuardarTablaQ()
         {
-            StreamWriter file = new StreamWriter(filePath);
-            //my2darray  is my 2d array created.
-            for (int i = 0; i < tableQ.nRows; i++)
+            string filePath = @"Assets/Scripts/Grupo9/tableQ.csv";
+
+            // Crear archivo si no existe
+            if (!File.Exists(filePath))
             {
-                for (int j = 0; j < tableQ.nCols; j++)
+                using (StreamWriter sw = File.CreateText(filePath))
                 {
-                    file.Write(tableQ.value[i, j]);
-                    file.Write(",");
+                    // Crear archivo vacío
                 }
-                file.Write("\n"); // go to next line
             }
-            Debug.Log("CSV CREADO");
+
+            // Escribir datos en el archivo
+            File.WriteAllLines(filePath, ToCsv(tableQ.value));
         }
-        private static IEnumerable<String> ToCsv<T>(T[,] data, string separator = "/")
+
+        private static IEnumerable<string> ToCsv<T>(T[,] data, string separator = ";")
         {
             for (int i = 0; i < data.GetLength(0); ++i)
+            {
                 yield return string.Join(separator, Enumerable
                   .Range(0, data.GetLength(1))
-                  .Select(j => data[i, j])); // simplest, we don't expect ',' and '"' in the items
+                  .Select(j => data[i, j]));
+            }
         }
+
         #endregion
 
         public static bool compararArraysBooleanos(bool[] array1, bool[] array2)
