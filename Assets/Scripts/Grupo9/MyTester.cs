@@ -11,19 +11,18 @@ namespace Grupo9
     public class MyTester : IQMind
     {
         private WorldInfo worldInfo;
-        private string filePath = "Assets/Scripts/Grupo9/TablaQ.csv";
+        
+        private float[,] _tablaQ; //Valores de la tabla Q
+        Grupo9.State[] states = new Grupo9.State[16 * 9]; //array de estados
 
-        //Tabla Q
-        private float[,] _tablaQ;
-        Grupo9.State[] states = new Grupo9.State[16 * 9];
-
+        //tamaño de la tabla Q
         private int nRows = 4;
         private int nCols = (4*4)* (3*3);
 
         public void Initialize(WorldInfo worldInfo)
         {
             this.worldInfo = worldInfo;
-            InitializeStates();
+            InitializeStates(); //inicializamos array de estados
             LoadQTable();
 
             
@@ -32,26 +31,17 @@ namespace Grupo9
         public CellInfo GetNextStep(CellInfo currentPosition, CellInfo otherPosition)
         {
 
-            Grupo9.State state = CalculateState(currentPosition, otherPosition, worldInfo);
-            int action = GetAction(state);
+            Grupo9.State state = CalculateState(currentPosition, otherPosition, worldInfo); //se calcula el estado
+            int action = GetAction(state); //se calcula la mejor accion
 
-            CellInfo agentCell = QMind.Utils.MoveAgent(action, currentPosition, worldInfo);
-            agentCell = QMind.Utils.MoveAgent(action, currentPosition, worldInfo);
-
-            if (!agentCell.Walkable)
-            {
-                Grupo9.State auxstate = CalculateState(currentPosition, otherPosition, worldInfo);
-                int auxaction = GetAction(auxstate);
-
-                CellInfo auxagentCell = QMind.Utils.MoveAgent(auxaction, currentPosition, worldInfo);
-                agentCell = QMind.Utils.MoveAgent(auxaction, currentPosition, worldInfo);
-            }
+            CellInfo agentCell = QMind.Utils.MoveAgent(action, currentPosition, worldInfo); //se calcula la celda
 
             return agentCell;
         }
 
         private int GetAction(Grupo9.State state)
         {
+            //Se deuvel la mejor acción según el valor de Q
             int bestQaction = 0;
             float bestQ = -1000.0f;
             for (int i = 0; i < nRows; i++)
@@ -68,15 +58,15 @@ namespace Grupo9
         private void InitializeStates()
         {
             int indice = 0;
-             // 16 combinaciones de walkableNeighbours y 9 combinaciones de enemyRelativePosition
 
+             // 16 combinaciones de walkableNeighbours y 9 combinaciones de enemyRelativePosition
             for (int i = 0; i < 16; i++)
             {
                 bool[] walkableNeighbours = new bool[4];
                 walkableNeighbours[0] = (i & 8) != 0; // North
-                walkableNeighbours[2] = (i & 4) != 0; // South
-                walkableNeighbours[1] = (i & 2) != 0; // West
-                walkableNeighbours[3] = (i & 1) != 0; // East
+                walkableNeighbours[2] = (i & 4) != 0; // East
+                walkableNeighbours[1] = (i & 2) != 0; // South
+                walkableNeighbours[3] = (i & 1) != 0; // West
 
                 for (int j = -1; j <= 1; j++)
                 {
@@ -91,7 +81,7 @@ namespace Grupo9
         }
         private void LoadQTable()
         {
-            string filePath = @"Assets/Scripts/Grupo9/tableQ.csv";
+            string filePath = @"Assets/Scripts/Grupo9/tableQ.csv"; //Se busca la tablaQ
             StreamReader reader;
             if (File.Exists(filePath))
             {
@@ -158,13 +148,14 @@ namespace Grupo9
                                                 &&
                     compararArraysInt(tempEnemyRelativePosition, states[i].enemyRelativePosition))
                 {
-                    return states[i];
+                    return states[i]; //Se devuelve el estado
                 }
             }
             return null;
 
         }
 
+        //Métodos para comparar los arrays
         public static bool compararArraysBooleanos(bool[] array1, bool[] array2)
         {
             if (array1.Length != array2.Length)

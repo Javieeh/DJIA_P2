@@ -52,7 +52,7 @@ namespace QMind
             OnEpisodeStarted?.Invoke(this, EventArgs.Empty);
         }
 
-        public void DoStep(bool train, WorldInfo worldInfo)
+        public void DoStep(bool train)
         {
 
             Debug.Log("QMindTrainerDummy: DoStep");
